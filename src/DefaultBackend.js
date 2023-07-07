@@ -45,9 +45,14 @@ module.exports = class DefaultBackend {
       await this._idb.wipe()
       await this._mutex.release({ force: true })
     }
-    if (!(await this._mutex.has())) await this._mutex.wait()
+    if (!(await this._mutex.has())) {
+      //waiting for mutex
+      debugger;
+      await this._mutex.wait()
+    }
     // Attempt to load FS from IDB backend
     const root = await this._idb.loadSuperblock()
+    debugger;
     if (root) {
       this._cache.activate(root);
     } else if (this._http) {

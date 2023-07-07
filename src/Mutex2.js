@@ -12,6 +12,8 @@ module.exports = class Mutex {
   async acquire () {
     return new Promise(resolve => {
       navigator.locks.request(this._database + "_lock", {ifAvailable: true}, lock => {
+        //I want to know when we get the lock
+        debugger;
         this._has = !!lock
         resolve(!!lock)
         return new Promise(resolve => {
@@ -20,8 +22,8 @@ module.exports = class Mutex {
       }); 
     })
   }
-  // Returns true if successful, gives up after 10 minutes
-  async wait ({ timeout = 600000 } = {}) {
+  // Returns true if successful, gives up after 30 seconds (adjusted to try and repro easier)
+  async wait ({ timeout = 60000 } = {}) {
     return new Promise((resolve, reject) => {
       const controller = new AbortController();
       setTimeout(() => {
@@ -40,6 +42,8 @@ module.exports = class Mutex {
   // Returns true if successful
   async release ({ force = false } = {}) {
     this._has = false
+    //I want to know when we release
+    debugger;
     if (this._release) {
       this._release()
     } else if (force) {
