@@ -55,7 +55,7 @@ module.exports = class PromisifiedFS {
     this.readlink = this._wrap(this.readlink, cleanParamsFilepathOpts, false)
     this.symlink = this._wrap(this.symlink, cleanParamsFilepathFilepath, true)
     this.backFile = this._wrap(this.backFile, cleanParamsFilepathOpts, true)
-    this.du = this._wrap(this.du, cleanParamsFilepathOpts, false);
+    this.du = this._wrap(this.du, cleanParamsFilepathOpts, false)
 
     this._deactivationPromise = null
     this._deactivationTimeout = null
@@ -98,9 +98,13 @@ module.exports = class PromisifiedFS {
     }
   }
   async _gracefulShutdown () {
+    console.log("lfs gracefulShutdown operations: ", [...this._operations])
     if (this._operations.size > 0) {
+      debugger;
       this._isShuttingDown = true
       await new Promise(resolve => this._gracefulShutdownResolve = resolve);
+      console.log("lfs gracefulShutdown proceeding: ")
+
       this._isShuttingDown = false
       this._gracefulShutdownResolve = null
     }
@@ -112,39 +116,47 @@ module.exports = class PromisifiedFS {
         name: fn.name,
         args,
       }
-      this._operations.add(op)
       try {
-        await this._activate()
+        await this._activate(fn.name)
+        this._operations.add(op)
         return await fn.apply(this, args)
+      } catch(error) {
+        console.log("lfs error for function", fn.name, error);
       } finally {
+        console.log("lfs in finally for function: ", fn.name);
         this._operations.delete(op)
         if (mutating) this._backend.saveSuperblock() // this is debounced
+        console.log("lfs operations size", this._operations.size, [...this._operations]);
         if (this._operations.size === 0) {
+          console.log("lfs deactivation timeout", this._deactivationTimeout);
           if (!this._deactivationTimeout) clearTimeout(this._deactivationTimeout)
-          this._deactivationTimeout = setTimeout(this._deactivate.bind(this), 500)
+          this._deactivationTimeout = setTimeout(this._deactivate.bind(this, fn.name), 500)
         }
       }
     }
   }
-  async _activate() {
+  async _activate(context = "") {
     if (!this._initPromise) console.warn(new Error(`Attempted to use LightningFS ${this._name} before it was initialized.`))
     await this._initPromise
     if (this._deactivationTimeout) {
+      console.log("lfs clearing timeout on activation", context);
       clearTimeout(this._deactivationTimeout)
       this._deactivationTimeout = null
     }
     if (this._deactivationPromise) await this._deactivationPromise
     this._deactivationPromise = null
     if (!this._activationPromise) {
-      this._activationPromise = this._backend.activate ? this._backend.activate() : Promise.resolve();
+      this._activationPromise = this._backend.activate ? this._backend.activate(context) : Promise.resolve();
     }
     await this._activationPromise
   }
-  async _deactivate() {
+  async _deactivate(context = "") {
+    console.log("lfs in _deactivate: ", context);
     if (this._activationPromise) await this._activationPromise
 
     if (!this._deactivationPromise) {
-      this._deactivationPromise = this._backend.deactivate ? this._backend.deactivate() : Promise.resolve();
+      console.log("lfs deactivation time", this._deactivationPromise, context);
+      this._deactivationPromise = this._backend.deactivate ? this._backend.deactivate(context) : Promise.resolve();
     }
     this._activationPromise = null
     if (this._gracefulShutdownResolve) this._gracefulShutdownResolve()
@@ -165,7 +177,9 @@ module.exports = class PromisifiedFS {
     return this._backend.readdir(filepath, opts);
   }
   async mkdir(filepath, opts) {
+    console.log("lfs in mkdir starting", filepath, performance.now())
     await this._backend.mkdir(filepath, opts);
+    console.log("lfs in mkdir done", filepath, performance.now())
     return null
   }
   async rmdir(filepath, opts) {

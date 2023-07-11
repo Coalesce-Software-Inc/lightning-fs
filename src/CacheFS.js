@@ -111,9 +111,6 @@ module.exports = class CacheFS {
     let parts = path.split(filepath)
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
-      if (dir === undefined) {
-        debugger;
-      }
       dir = dir.get(part);
       if (!dir) throw new ENOENT(filepath);
       // Follow symlinks

@@ -26,6 +26,7 @@ module.exports = class DefaultBackend {
     lockDbName = name + "_lock",
     lockStoreName = name + "_lock",
   } = {}) {
+    console.log("lfs initing ", name);
     this._name = name
     this._idb = db || new IdbBackend(fileDbName, fileStoreName);
     this._mutex = navigator.locks ? new Mutex2(name) : new Mutex(lockDbName, lockStoreName);
@@ -37,22 +38,20 @@ module.exports = class DefaultBackend {
       this._urlauto = !!urlauto
     }
   }
-  async activate() {
+  async activate(context = "") {
+    console.log("lfs Activating...", this._name, "wiping?", this._needsWipe, "context: ", context);
     if (this._cache.activated) return
     // Wipe IDB if requested
     if (this._needsWipe) {
       this._needsWipe = false;
       await this._idb.wipe()
-      await this._mutex.release({ force: true })
+      await this._mutex.release({ force: true, context })
     }
     if (!(await this._mutex.has())) {
-      //waiting for mutex
-      debugger;
-      await this._mutex.wait()
+      await this._mutex.wait({ context })
     }
     // Attempt to load FS from IDB backend
     const root = await this._idb.loadSuperblock()
-    debugger;
     if (root) {
       this._cache.activate(root);
     } else if (this._http) {
@@ -70,13 +69,14 @@ module.exports = class DefaultBackend {
       throw new ETIMEDOUT()
     }
   }
-  async deactivate() {
+  async deactivate(context ="") {
+    console.log("lfs Deactivating...", context, "for", this._name);
     if (await this._mutex.has()) {
       await this._saveSuperblock()
     }
     this._cache.deactivate()
     try {
-      await this._mutex.release()
+      await this._mutex.release({ context })
     } catch (e) {
       console.log(e)
     }
