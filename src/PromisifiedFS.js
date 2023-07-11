@@ -112,9 +112,15 @@ module.exports = class PromisifiedFS {
         name: fn.name,
         args,
       }
-      this._operations.add(op)
       try {
         await this._activate()
+        /**
+         * If this is before activate, gracefulShutdown can get stuck with
+         * new items in the operations set that are waiting to start, which
+         * can cause a deadlock
+         * Happens when calling init while operations are in progress (werid timing)
+         */
+        this._operations.add(op)
         return await fn.apply(this, args)
       } finally {
         this._operations.delete(op)
