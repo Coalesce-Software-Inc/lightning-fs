@@ -114,8 +114,9 @@ module.exports = class CacheFS {
     
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
-      if (!dir) throw new ENOENT(filepath);
+      
       dir = dir.get(part);
+      if (!dir) throw new ENOENT(filepath);
       // Follow symlinks
       if (follow || i < parts.length - 1) {
         const stat = dir.get(STAT)
