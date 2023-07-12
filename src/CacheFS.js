@@ -118,17 +118,15 @@ module.exports = class CacheFS {
         debugger
       }
 
-      if (!dir || !dir.get) {
-        debugger
-        console.log("looking up filepath: ", filepath)
-        throw new ENOENT(filepath);
-      }
-
       dir = dir.get(part);
+
+      if (!dir) {
+        throw new ENOENT(filepath);
+      } 
       // Follow symlinks
       if (follow || i < parts.length - 1) {
-        if (!dir) debugger
         const stat = dir.get(STAT)
+
         if (stat.type === 'symlink') {
           let target = path.resolve(partialPath, stat.target)
           dir = this._lookup(target)
