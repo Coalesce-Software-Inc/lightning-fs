@@ -112,6 +112,8 @@ module.exports = class CacheFS {
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
 
+      if (part === "workspace") debugger
+
       if (!dir || !dir.get) {
         debugger
         console.log("looking up filepath: ", filepath)
