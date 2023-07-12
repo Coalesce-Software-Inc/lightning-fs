@@ -121,6 +121,7 @@ module.exports = class CacheFS {
       dir = dir.get(part);
       // Follow symlinks
       if (follow || i < parts.length - 1) {
+        if (!dir) debugger
         const stat = dir.get(STAT)
         if (stat.type === 'symlink') {
           let target = path.resolve(partialPath, stat.target)
