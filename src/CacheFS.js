@@ -109,6 +109,9 @@ module.exports = class CacheFS {
     let dir = this._root;
     let partialPath = '/'
     let parts = path.split(filepath)
+
+    if (!dir) throw new ENOTDIR()
+    
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
       if (!dir) throw new ENOENT(filepath);
