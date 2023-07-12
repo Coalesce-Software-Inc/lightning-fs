@@ -111,6 +111,15 @@ module.exports = class CacheFS {
     let parts = path.split(filepath)
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
+
+      /**
+       * There may be race conditions where the root gets wiped (likely during reinitializing) before the
+       * `dir.get` call below on line 123. This prevents any potential TypeErrors from being thrown.
+       */
+      if (!dir) {
+        throw new ENOTDIR()
+      }
+
       dir = dir.get(part);
       if (!dir) throw new ENOENT(filepath);
       // Follow symlinks
