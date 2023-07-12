@@ -112,7 +112,11 @@ module.exports = class CacheFS {
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
 
-      if (part === "workspace") debugger
+      if (part === "workspace") {
+        console.log("Expecting dir.get result to be undefined.")
+        console.log("dir: ", dir)
+        debugger
+      }
 
       if (!dir || !dir.get) {
         debugger
