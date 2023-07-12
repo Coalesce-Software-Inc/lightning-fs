@@ -112,11 +112,12 @@ module.exports = class CacheFS {
     for (let i = 0; i < parts.length; ++ i) {
       let part = parts[i];
 
-      if (!dir) {
+      if (!dir || !dir.get) {
         debugger
+        console.log("looking up filepath: ", filepath)
         throw new ENOENT(filepath);
       }
-      
+
       dir = dir.get(part);
       // Follow symlinks
       if (follow || i < parts.length - 1) {
@@ -215,6 +216,7 @@ module.exports = class CacheFS {
     this.unlink(oldFilepath)
   }
   stat(filepath) {
+    console.log("running .stat for filepath: ", filepath)
     return this._lookup(filepath).get(STAT);
   }
   lstat(filepath) {
