@@ -1,6 +1,7 @@
 const DefaultBackend = require("./DefaultBackend.js");
 const Stat = require("./Stat.js");
-
+const Mutex = require("./Mutex.js");
+const Mutex2 = require("./Mutex2.js");
 const path = require("./path.js");
 
 function cleanParamsFilepathOpts(filepath, opts, ...rest) {
@@ -60,6 +61,8 @@ module.exports = class PromisifiedFS {
     this._deactivationPromise = null
     this._deactivationTimeout = null
     this._activationPromise = null
+    //new mutex to protect from multiple initialization from occurring and destroying things at the same time
+    this._mutex = navigator.locks ? new Mutex2(name + "initialization") : new Mutex(name + "_lock", name + "_lock");
 
     this._operations = new Set()
 
@@ -67,34 +70,45 @@ module.exports = class PromisifiedFS {
       this.init(name, options)
     }
   }
-  async init (...args) {
+  async init (name, options = {}) {
     if (this._initPromiseResolve) await this._initPromise;
-    this._initPromise = this._init(...args)
-    return this._initPromise
-  }
-  async _init (name, options = {}) {
-    await this._gracefulShutdown();
-    if (this._activationPromise) await this._deactivate()
-
-    if (this._backend && this._backend.destroy) {
-      await this._backend.destroy();
-    }
-    this._backend = options.backend || new DefaultBackend();
-    if (this._backend.init) {
-      await this._backend.init(name, options);
-    }
-
-    if (this._initPromiseResolve) {
-      this._initPromiseResolve();
-      this._initPromiseResolve = null;
-    }
-    // The next comment starting with the "fs is initially activated when constructed"?
-    // That can create contention for the mutex if two threads try to init at the same time
-    // so I've added an option to disable that behavior.
+    this._initPromise = this._init(name, options);
+    await this._initPromise;
     if (!options.defer) {
       // The fs is initially activated when constructed (in order to wipe/save the superblock)
-      // This is not awaited, because that would create a cycle.
-      this.stat('/')
+      await this.stat('/');
+    }
+    return this._initPromise;
+  }
+  async _init (name, options = {}) {
+    /**
+     * Using a mutex so we can insure that only one init per database name can occur at 1 time
+     * This should stop multiple inits from stomping on each other and should allow us to properly await
+     * this.stat() which is used to finish init/activation later on (in this.init)
+     */
+    try {
+      const hasMutex = await this._mutex.has();
+      if (!hasMutex) {
+        await this._mutex.wait();
+      }
+      await this._gracefulShutdown();
+      if (this._activationPromise) await this._deactivate();
+  
+      if (this._backend && this._backend.destroy) {
+        await this._backend.destroy();
+      }
+      this._backend = options.backend || new DefaultBackend();
+      if (this._backend.init) {
+        await this._backend.init(name, options);
+      }
+  
+      if (this._initPromiseResolve) {
+        this._initPromiseResolve();
+        this._initPromiseResolve = null;
+      }
+    } finally {
+      //always call release, so we don't introduce a new mutex timeout issue
+      await this._mutex.release()
     }
   }
   async _gracefulShutdown () {
