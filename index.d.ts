@@ -257,6 +257,7 @@ declare module '@isomorphic-git/lightning-fs' {
        * @default null
        */
       db?: FS.IDB
+      logger?: any
     }
     export interface IDB {
       constructor(dbname: string, storename: string): IDB

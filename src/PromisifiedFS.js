@@ -43,6 +43,7 @@ function cleanParamsFilepathFilepath(oldFilepath, newFilepath, ...rest) {
 
 module.exports = class PromisifiedFS {
   constructor(name, options = {}) {
+    this.logger = options.logger ? options.logger: logger = { debug: (...args) => console.log(...args), alert: (...args) => console.log(...args) };
     this.init = this.init.bind(this)
     this.readFile = this._wrap(this.readFile, cleanParamsFilepathOpts, false)
     this.writeFile = this._wrap(this.writeFile, cleanParamsFilepathDataOpts, true)
@@ -71,50 +72,68 @@ module.exports = class PromisifiedFS {
     }
   }
   async init (name, options = {}) {
+    const startTime = performance.now();
     if (this._initPromiseResolve) await this._initPromise;
-    this._initPromise = this._init(name, options);
-    await this._initPromise;
-    if (!options.defer) {
-      // The fs is initially activated when constructed (in order to wipe/save the superblock)
-      await this.stat('/');
-    }
-    return this._initPromise;
-  }
-  async _init (name, options = {}) {
-    /**
-     * Using a mutex so we can insure that only one init per database name can occur at 1 time
-     * This should stop multiple inits from stomping on each other and should allow us to properly await
-     * this.stat() which is used to finish init/activation later on (in this.init)
-     */
     try {
-      const hasMutex = await this._mutex.has();
-      if (!hasMutex) {
-        await this._mutex.wait();
-      }
-      await this._gracefulShutdown();
-      if (this._activationPromise) await this._deactivate();
-  
-      if (this._backend && this._backend.destroy) {
-        await this._backend.destroy();
-      }
-      this._backend = options.backend || new DefaultBackend();
-      if (this._backend.init) {
-        await this._backend.init(name, options);
-      }
-  
-      if (this._initPromiseResolve) {
-        this._initPromiseResolve();
-        this._initPromiseResolve = null;
+      /**
+       * Using a mutex so we can insure that only one init per database name can occur at 1 time
+       * This should stop multiple inits from stomping on each other and should allow us to properly await
+       * this.stat() which is used to finish init/activation later on
+       */
+      await this._mutex.wait();
+
+      this.logger.debug("git-debug",startTime, name, "Have the initialization mutex, starting to initialize");
+      this._initPromise = this._init(name, options, startTime);
+      await this._initPromise;
+      if (!options.defer) {
+        // The fs is initially activated when constructed (in order to wipe/save the superblock)
+        await this.stat('/');
       }
     } finally {
       //always call release, so we don't introduce a new mutex timeout issue
+      this.logger.debug("git-debug",startTime, name, "releasing initialization mutex");
       await this._mutex.release()
+      this.logger.debug("git-debug",startTime, name, "releasing initialization mutex complete");
     }
+  }
+  async _init (name, options = {}, startTime) {
+      await this._gracefulShutdown();
+      this.logger.debug("git-debug",startTime, name, "gracefulShutdown complete");
+
+      if (this._activationPromise) {
+        this.logger.debug("git-debug",startTime, name, "deactivating previous backend");
+        await this._deactivate();
+        this.logger.debug("git-debug",startTime, name, "deactivating previous backend complete");
+      }
+      
+      if (this._backend && this._backend.destroy) {
+      this.logger.debug("git-debug",startTime, name, "destroying backend");
+        await this._backend.destroy();
+      this.logger.debug("git-debug",startTime, name, "destroying backend complete");
+
+      }
+      this._backend = options.backend || new DefaultBackend();
+      if (this._backend.init) {
+      this.logger.debug("git-debug",startTime, name, "initializing new backend");
+        await this._backend.init(name, options);
+      this.logger.debug("git-debug",startTime, name, "initializing new backend complete");
+      }
   }
   async _gracefulShutdown () {
     if (this._operations.size > 0) {
       this._isShuttingDown = true
-      await new Promise(resolve => this._gracefulShutdownResolve = resolve);
+      let timeoutID;
+      await new Promise(resolve => {
+        this._gracefulShutdownResolve = () => {
+          timeoutID = setInterval(() => {
+            this.logger.debug("git-debug","Waiting for graceful shutdown", this._operations);
+          }, 1000)
+          return resolve() 
+        }
+      });
+      if (timeoutID) {
+        clearInterval(timeoutID);
+      }
       this._isShuttingDown = false
       this._gracefulShutdownResolve = null
     }
@@ -126,7 +145,11 @@ module.exports = class PromisifiedFS {
         name: fn.name,
         args,
       }
+      let timeoutID;
       try {
+        timeoutID = setTimeout(() => {
+          this.logger.alert("git-debug","Failed to activate for", fn.name, "These operations are still holding the mutex: ", this._operations);
+        }, 5 * 60 * 1000)
         await this._activate()
         /**
          * If this is before activate, gracefulShutdown can get stuck with
@@ -137,6 +160,7 @@ module.exports = class PromisifiedFS {
         this._operations.add(op)
         return await fn.apply(this, args)
       } finally {
+        clearTimeout(timeoutID);
         this._operations.delete(op)
         if (mutating) this._backend.saveSuperblock() // this is debounced
         if (this._operations.size === 0) {
