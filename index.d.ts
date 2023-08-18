@@ -17,7 +17,7 @@ declare module '@isomorphic-git/lightning-fs' {
      * @param name This is used to determine the IndexedDb store name.
      * @param options The "filesystem" configuration.
      */
-    init(name: string, options?: FS.Options): void
+    init(name: string, options?: FS.Options): Promise<void>
 
     /**
      * Make directory
