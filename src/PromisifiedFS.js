@@ -20,6 +20,34 @@ function cleanParamsFilepathOpts(filepath, opts, ...rest) {
   return [filepath, opts, ...rest];
 }
 
+function cleanParamsFilepathsOpts(filepaths, opts, ...rest) {
+  filepaths = filepaths.map(fpath => path.normalize(fpath))
+  if (typeof opts === "undefined" || typeof opts === "function") {
+    opts = {};
+  }
+  // expand string options to encoding options
+  if (typeof opts === "string") {
+    opts = {
+      encoding: opts,
+    };
+  }
+  return [filepaths, opts, ...rest];
+}
+
+function cleanParamsFilepathsAndDataOpts(filepaths, opts, ...rest) {
+  filepaths = filepaths.map(([fpath, data]) => [path.normalize(fpath), data])
+  if (typeof opts === "undefined" || typeof opts === "function") {
+    opts = {};
+  }
+  // expand string options to encoding options
+  if (typeof opts === "string") {
+    opts = {
+      encoding: opts,
+    };
+  }
+  return [filepaths, opts, ...rest];
+}
+
 function cleanParamsFilepathDataOpts(filepath, data, opts, ...rest) {
   // normalize paths
   filepath = path.normalize(filepath);
@@ -46,8 +74,11 @@ module.exports = class PromisifiedFS {
     this.logger = options.logger ? options.logger: logger = { debug: (...args) => console.log(...args), alert: (...args) => console.log(...args) };
     this.init = this.init.bind(this)
     this.readFile = this._wrap(this.readFile, cleanParamsFilepathOpts, false)
+    this.readFiles = this._wrap(this.readFiles, cleanParamsFilepathsOpts, false)
     this.writeFile = this._wrap(this.writeFile, cleanParamsFilepathDataOpts, true)
+    this.writeFiles = this._wrap(this.writeFiles, cleanParamsFilepathsAndDataOpts, true)
     this.unlink = this._wrap(this.unlink, cleanParamsFilepathOpts, true)
+    this.unlinkMany = this._wrap(this.unlinkMany, cleanParamsFilepathsOpts, true)
     this.readdir = this._wrap(this.readdir, cleanParamsFilepathOpts, false)
     this.mkdir = this._wrap(this.mkdir, cleanParamsFilepathOpts, true)
     this.rmdir = this._wrap(this.rmdir, cleanParamsFilepathOpts, true)
@@ -197,12 +228,25 @@ module.exports = class PromisifiedFS {
   async readFile(filepath, opts) {
     return this._backend.readFile(filepath, opts);
   }
+
+  async readFiles(filepaths, opts) {
+    return this._backend.readFiles(filepaths, opts);
+  }
   async writeFile(filepath, data, opts) {
     await this._backend.writeFile(filepath, data, opts);
     return null
   }
+
+  async writeFiles(filepathsAndData, opts) {
+    await this._backend.writeFiles(filepathsAndData, opts);
+    return null;
+  }
   async unlink(filepath, opts) {
     await this._backend.unlink(filepath, opts);
+    return null
+  }
+  async unlinkMany(filepaths, opts) {
+    await this._backend.unlinkMany(filepaths, opts);
     return null
   }
   async readdir(filepath, opts) {

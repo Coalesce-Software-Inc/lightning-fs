@@ -149,9 +149,15 @@ declare module '@isomorphic-git/lightning-fs' {
       readdir(filepath: string, options?: undefined): Promise<string[]>
 
       writeFile(filepath: string, data: Uint8Array | string, options?: FS.WriteFileOptions | string): Promise<void>
+      
+      writeFiles(filesAndData: [filepath: string, data: Uint8Array | string][], options?: FS.WriteFileOptions | string): Promise<void>
 
       readFile(filepath: string, options: 'utf8' | { encoding: 'utf8' }): Promise<string>
       readFile(filepath: string, options?: {}): Promise<Uint8Array>
+
+      readFiles(filepaths: string[], options: 'utf8' | { encoding: 'utf8' }): Promise<string[]>
+      readFiles(filepaths: string[], options: 'utf8' | { encoding: 'utf8' }): Promise<Uint8Array[]>
+
 
       /**
        * Delete a file
@@ -160,6 +166,12 @@ declare module '@isomorphic-git/lightning-fs' {
        */
       unlink(filepath: string, options?: undefined): Promise<void>
 
+        /**
+       * Delete files
+       * @param filepath
+       * @param options
+       */
+      unlinkMany(filepaths: string[], options?: undefined): Promise<void>
       /**
        * Rename a file or directory
        * @param oldFilepath

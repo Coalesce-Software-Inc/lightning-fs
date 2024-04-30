@@ -126,6 +126,25 @@ module.exports = class DefaultBackend {
     if (!stat) throw new ENOENT(filepath)
     return data;
   }
+  async readFiles(filepaths, opts) {
+    const encoding = typeof opts === "string" ? opts : opts && opts.encoding;
+    if (encoding && encoding !== 'utf8') throw new Error('Only "utf8" encoding is supported in readFile');
+    try {
+      const stats = filepaths.map((path) => this._cache.stat(path).ino);
+      const data = await this._idb.readFiles(stats);
+      const decodedData = data.map((data) => {
+        if (encoding === "utf8") {
+          data = decode(data);
+        } else {
+          data.toString = () => decode(data);
+        }
+        return data;
+      })
+      return decodedData;
+    } catch(error) {
+      if (!this._urlauto) throw e
+    }
+  }
   async writeFile(filepath, data, opts) {
     const { mode, encoding = "utf8" } = opts;
     if (typeof data === "string") {
@@ -137,11 +156,38 @@ module.exports = class DefaultBackend {
     const stat = await this._cache.writeStat(filepath, data.byteLength, { mode });
     await this._idb.writeFile(stat.ino, data)
   }
+
+  async writeFiles(filepathsAndData, opts) {
+    const { mode, encoding = "utf8" } = opts;
+
+    const statsAndDataPromises = filepathsAndData.map(([filepath, data]) => {
+      if (typeof data === "string") {
+        if (encoding !== "utf8") {
+          throw new Error('Only "utf8" encoding is supported in writeFile');
+        }
+        data = encode(data);
+      }
+      return [this._cache.writeStat(filepath, data.byteLength, { mode }), data];
+    })
+
+    const statsAndData = await Promise.all(statsAndDataPromises);
+    await this._idb.writeFiles(statsAndData.map(([stat, data]) => ([stat.ino, data])));
+  }
   async unlink(filepath, opts) {
     const stat = this._cache.lstat(filepath);
     this._cache.unlink(filepath);
     if (stat.type !== 'symlink') {
       await this._idb.unlink(stat.ino)
+    }
+  }
+  async unlinkMany(filepaths, opts) {
+    const stats = filepaths.map((path) => {
+      const lstatInfo = this._cache.lstat(path);
+      this._cache.unlink(path);
+      return lstatInfo.ino
+    }).filter((stat) => stat.type !== "symlink");
+    if (stats.length) {
+      await this._idb.unlinkMany(stats);
     }
   }
   readdir(filepath, opts) {
